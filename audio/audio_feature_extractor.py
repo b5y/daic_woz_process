@@ -22,12 +22,10 @@ class LogMelExtractor:
         logmel_spectrogram: numpy.array - The log-Mel spectrogram
     """
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin,
-                 fmax, window_func, log=True, snv=False):
+                 fmax):
         self.window_size = window_size
         self.hop_size = hop_size
-        self.window_func = window_func
-        self.log = log
-        self.snv = snv
+        self.window_func = np.hanning(window_size)
 
         # Output in the form of ((n_fft//2 + 1), mel_bins)
         self.melW = librosa.filters.mel(sr=sample_rate,
@@ -50,23 +48,20 @@ class LogMelExtractor:
                                   window_func=self.window_func)
 
         # Mel spectrogram
-        spectrogram = np.dot(stft_matrix.T, self.melW.T)
+        mel_spectrogram = np.dot(stft_matrix.T, self.melW.T)
 
         # Log mel spectrogram
-        if self.log:
-            spectrogram = librosa.core.power_to_db(spectrogram, ref=1.0,
-                                                   amin=1e-10, top_db=None)
+        logmel_spectrogram = librosa.core.power_to_db(
+            mel_spectrogram, ref=1.0, amin=1e-10,
+            top_db=None)
 
-        spectrogram = spectrogram.astype(np.float32).T
+        logmel_spectrogram = logmel_spectrogram.astype(np.float32).T
 
-        if self.snv:
-            spectrogram = standard_normal_variate(spectrogram)
-
-        return spectrogram
+        return logmel_spectrogram
 
 
 def sepctrogram(audio, window_size, hop_size, squared,
-                window_func=np.hanning(1024), snv=False):
+                window_func=np.hanning(1024)):
     """
     Computes the STFT of some audio data.
 
@@ -89,17 +84,7 @@ def sepctrogram(audio, window_size, hop_size, squared,
     if squared:
         stft_matrix = stft_matrix ** 2
 
-    if snv:
-        stft_matrix = standard_normal_variate(stft_matrix)
-
     return stft_matrix
-
-
-def standard_normal_variate(data):
-    mean = np.mean(data)
-    std = np.std(data)
-
-    return (data - mean) / std
 
 
 def create_mfcc_delta(feature, concat=False):
@@ -121,35 +106,6 @@ def create_mfcc_delta(feature, concat=False):
         mfcc = np.concatenate((feature, mfcc_delta, mfcc_delta2))
     else:
         mfcc = np.array((feature, mfcc_delta, mfcc_delta2))
-
-    return mfcc
-
-
-def mfcc(audio, sample_rate, freq_bins, window_size, hop_size,
-         window_func=np.hanning(1024), snv=False):
-    """
-    Obtains the local differential (first and second order) of the MFCC
-
-    Inputs
-        audio: np.array - The audio data to be converted to MFCC
-        sample_rate: int - The original sampling rate of the audio
-        freq_bins: int - The number of mel bins
-        window_size: int - The length of the window to be passed over the data
-        hop_size: int - The gap between windows
-        window: numpy - The type of window function to be used
-
-    Output
-        mfcc: numpy.array - The Updated MFCC
-    """
-    mfcc = librosa.feature.mfcc(y=audio,
-                                sr=sample_rate,
-                                n_mfcc=freq_bins,
-                                n_fft=window_size,
-                                hop_length=hop_size,
-                                window=window_func)
-
-    if snv:
-        mfcc = standard_normal_variate(mfcc)
 
     return mfcc
 
@@ -200,8 +156,7 @@ def create_delta(feature, n_total=2, delta_order=2):
                                                     delta_order-1)))
 
 
-def feature_segmenter(feature, folder, clss, score, feature_exp, dim,
-                     convert_to_image=False):
+def feature_segmenter(feature, meta, feature_exp, dim, convert_to_image=False):
     """
     Segments the features into dimensions specified by feature.shape[-1] and
     dim. The number of extra dimensions is used to create lists of the
@@ -209,9 +164,7 @@ def feature_segmenter(feature, folder, clss, score, feature_exp, dim,
 
     Inputs:
         feature: The feature array to be segmented
-        folder: Folder related to the feature
-        clss: Class related to the feature
-        score: Score related to the feature
+        meta: Includes Folder, Class, Score, and Gender
         feature_exp: Type of feature experiment eg. logmel
         dim: Value to segment the data by
         convert_to_image: Bool - Is the feature array being converted to 3D?
@@ -241,10 +194,11 @@ def feature_segmenter(feature, folder, clss, score, feature_exp, dim,
         new_features = np.zeros([num_extra_dimensions, feature.shape[0], dim],
                                 dtype=np.float32)
 
-    # Goes through all features and takes segments of 512 samples to
-    # make  a new variable with dimensions of (x, 128, 512) instead of
-    # (142, 128, 8236) 512 doesn't exactly fit into 8236/512 therefore
-    # the last section will be zero padded. No overlap has been
+    # E.g. if mel bins = 128 and segments = 512, and original length of
+    # data = 8236, goes through all features and takes segments of 512
+    # samples to make a new variable with dimensions of (x, 128,
+    # 512) instead of (x, 128, 8236) 512 doesn't exactly fit into 8236/512
+    # therefore the last section will be zero padded. No overlap has been
     # considered so far.
     last_dim = feature.shape[-1]
     leftover = dim - (last_dim % dim)
@@ -274,14 +228,16 @@ def feature_segmenter(feature, folder, clss, score, feature_exp, dim,
         new_features[:, :, :] = np.split(feature, num_extra_dimensions,
                                          axis=1)
 
-    new_folders = [folder] * num_extra_dimensions
-    new_classes = [clss] * num_extra_dimensions
-    new_scores = [score] * num_extra_dimensions
+    new_folders = [meta[0]] * num_extra_dimensions
+    new_classes = [meta[1]] * num_extra_dimensions
+    new_scores = [meta[2]] * num_extra_dimensions
+    new_gender = [meta[3]] * num_extra_dimensions
 
-    return new_features, new_folders, new_classes, new_scores, new_indexes
+    return (new_features, new_folders, new_classes, new_scores, new_gender,
+            new_indexes)
 
 
-def moving_average(data, n, decimation=False):
+def moving_average(data, N, decimation=False):
     """
     Creates a moving average filter and applies it to some input data
 
@@ -293,10 +249,10 @@ def moving_average(data, n, decimation=False):
     Output
         ma_data: numpy.array - The filtered input data
     """
-    average_mask = np.ones(n) / n
+    average_mask = np.ones(N) / N
     if decimation:
         ma_data = np.convolve(data, average_mask, 'full')
-        return ma_data[n-1::n]
+        return ma_data[N-1::N]
     else:
         ma_data = np.convolve(data, average_mask, 'same')
         return ma_data

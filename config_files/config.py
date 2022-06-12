@@ -1,11 +1,12 @@
 import os
+
 import numpy as np
 
 # FEATURE_EXP: logmel, mel, raw, MFCC, MFCC_concat, or text
 # WHOLE_TRAIN: This setting is for mitigating the variable length of the data
 # by zero padding
 # SNV will normalise every file to mean=0 and standard deviation=1
-EXPERIMENT_DETAILS = {'FEATURE_EXP': 'mel',
+EXPERIMENT_DETAILS = {'FEATURE_EXP': 'logmel',
                       'FREQ_BINS': 40,
                       'DATASET_IS_BACKGROUND': False,
                       'WHOLE_TRAIN': False,
@@ -35,6 +36,6 @@ DEV_SPLIT_PATH = os.path.join(DATASET, 'dev_split_Depression_AVEC2017.csv')
 TEST_SPLIT_PATH_1 = os.path.join(DATASET, 'test_split_Depression_AVEC2017.csv')
 TEST_SPLIT_PATH_2 = os.path.join(DATASET, 'full_test_split.csv')
 # CHANGE THIS TO USE A SPECIFIC TEST FILE
-TEST_SPLIT_PATH = TEST_SPLIT_PATH_1
+TEST_SPLIT_PATH = TEST_SPLIT_PATH_2
 FULL_TRAIN_SPLIT_PATH = os.path.join(DATASET, 'full_train_split_Depression_AVEC2017.csv')
 COMP_DATASET_PATH = os.path.join(DATASET, 'complete_Depression_AVEC2017.csv')

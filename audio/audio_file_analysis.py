@@ -201,8 +201,9 @@ def create_database(labels, sample_rate, total_windows_in_file_max, max_value,
             log = True
         feature_extractor = audio_feature_extractor.LogMelExtractor(
             sample_rate=sample_rate, window_size=win_size, hop_size=hop_size,
-            mel_bins=freq_bins, fmin=fmin, fmax=fmax, window_func=window_func,
-            log=log, snv=snv)
+            mel_bins=freq_bins, fmin=fmin, fmax=fmax,
+            # window_func=window_func, log=log, snv=snv
+        )
 
     # Loop through all the files and get the sampling rate, number of
     # samples and the time in minutes
